@@ -4,6 +4,10 @@
   "description": "A sparse explorer showing only open tabs and pinned files, with expand-all and recursive filter per directory",
   "version": "0.0.1",
   "publisher": "eric-mountain",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EricMountain/vscode-sparse-explorer"
+  },
   "engines": {
     "vscode": "^1.74.0"
   },
