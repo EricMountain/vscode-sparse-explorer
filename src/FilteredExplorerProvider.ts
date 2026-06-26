@@ -28,8 +28,27 @@ export class FilteredExplorerProvider implements vscode.TreeDataProvider<Explore
     this._onDidChangeTreeData.fire();
   }
 
+  getParent(node: ExplorerNode): ExplorerNode | undefined {
+    if (node.isWorkspaceRoot) return undefined;
+
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) return undefined;
+
+    const parentPath = path.dirname(node.uri.fsPath);
+
+    const parentWsFolder = workspaceFolders.find(f => f.uri.fsPath === parentPath);
+    if (parentWsFolder) {
+      if (workspaceFolders.length === 1) return undefined;
+      return { uri: vscode.Uri.file(parentPath), isDirectory: true, isWorkspaceRoot: true, inExpandedContext: false };
+    }
+
+    const { inExpandedContext, propagatedFilter } = this._computeNodeContext(parentPath);
+    return { uri: vscode.Uri.file(parentPath), isDirectory: true, isWorkspaceRoot: false, inExpandedContext, propagatedFilter };
+  }
+
   getTreeItem(node: ExplorerNode): vscode.TreeItem {
     const item = new vscode.TreeItem(node.uri);
+    item.id = node.uri.fsPath;
 
     if (node.isDirectory) {
       const isExpanded = this.expandStore.isExpanded(node.uri.fsPath);
@@ -120,6 +139,22 @@ export class FilteredExplorerProvider implements vscode.TreeDataProvider<Explore
     }
 
     return nodes.sort(compareNodes);
+  }
+
+  private _computeNodeContext(dirPath: string): { inExpandedContext: boolean; propagatedFilter: string | undefined } {
+    const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
+    const workspacePaths = new Set(workspaceFolders.map(f => f.uri.fsPath));
+
+    const parentPath = path.dirname(dirPath);
+    if (workspacePaths.has(parentPath) || parentPath === dirPath) {
+      return { inExpandedContext: false, propagatedFilter: undefined };
+    }
+
+    if (this.expandStore.isExpanded(parentPath)) {
+      return { inExpandedContext: true, propagatedFilter: this.expandStore.getFilter(parentPath) };
+    }
+
+    return this._computeNodeContext(parentPath);
   }
 
   private async _getExpandedChildren(

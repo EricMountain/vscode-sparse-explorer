@@ -80,6 +80,22 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   ];
 
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(editor => {
+      if (!editor) return;
+      const uri = editor.document.uri;
+      if (uri.scheme !== 'file') return;
+      if (!vscode.workspace.getWorkspaceFolder(uri)) return;
+      if (!admittedStore.has(uri.fsPath)) return;
+      void Promise.resolve(
+        treeView.reveal(
+          { uri, isDirectory: false, isWorkspaceRoot: false, inExpandedContext: false },
+          { select: true, focus: false },
+        ),
+      ).catch(() => undefined);
+    }),
+  );
+
   context.subscriptions.push(treeView, tabTracker, ...cmds);
 }
 
