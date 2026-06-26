@@ -30,4 +30,13 @@ export class ExpandStore {
   hasFilter(dirPath: string): boolean {
     return this._dirFilters.has(dirPath);
   }
+
+  collapseAll(): void {
+    this._expandedDirs.clear();
+    this._dirFilters.clear();
+  }
+
+  hasAnyExpanded(): boolean {
+    return this._expandedDirs.size > 0;
+  }
 }

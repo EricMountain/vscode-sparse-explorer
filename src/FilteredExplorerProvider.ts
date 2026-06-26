@@ -57,7 +57,15 @@ export class FilteredExplorerProvider implements vscode.TreeDataProvider<Explore
         : vscode.TreeItemCollapsibleState.Collapsed;
 
       if (node.isWorkspaceRoot) {
-        item.contextValue = 'seDir.workspaceRoot';
+        if (isExpanded) {
+          item.contextValue = this.expandStore.hasFilter(node.uri.fsPath)
+            ? 'seDir.workspaceRoot.expandedFiltered'
+            : 'seDir.workspaceRoot.expanded';
+          const filter = this.expandStore.getFilter(node.uri.fsPath);
+          if (filter) item.description = `filter: ${filter}`;
+        } else {
+          item.contextValue = 'seDir.workspaceRoot';
+        }
       } else if (isExpanded) {
         item.contextValue = this.expandStore.hasFilter(node.uri.fsPath)
           ? 'seDir.expandedFiltered'
@@ -79,6 +87,7 @@ export class FilteredExplorerProvider implements vscode.TreeDataProvider<Explore
         arguments: [node.uri],
       };
       item.contextValue = 'seFile';
+      // item.contextValue = node.inExpandedContext ? 'seFile.expanded' : 'seFile';
       if (this.tabTracker.tabPaths.has(node.uri.fsPath)) {
         item.description = 'open';
       }
@@ -96,7 +105,12 @@ export class FilteredExplorerProvider implements vscode.TreeDataProvider<Explore
 
     if (!node) {
       if (workspaceFolders.length === 1) {
-        return this._getFilteredChildren(workspaceFolders[0].uri.fsPath);
+        const rootPath = workspaceFolders[0].uri.fsPath;
+        if (this.expandStore.isExpanded(rootPath)) {
+          const filter = this.expandStore.getFilter(rootPath);
+          return this._getExpandedChildren(rootPath, true, filter);
+        }
+        return this._getFilteredChildren(rootPath);
       }
       return workspaceFolders.map(f => ({
         uri: f.uri,

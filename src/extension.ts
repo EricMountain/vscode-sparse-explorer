@@ -23,14 +23,34 @@ export function activate(context: vscode.ExtensionContext): void {
 
   admittedStore.onDidChange(() => provider.refresh(), null, context.subscriptions);
 
+  function _expandedRootPath(): string | undefined {
+    return (vscode.workspace.workspaceFolders ?? []).find(f => expandStore.isExpanded(f.uri.fsPath))
+      ?.uri.fsPath;
+  }
+
   context.subscriptions.push(
-    vscode.workspace.onDidChangeWorkspaceFolders(() => provider.refresh()),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      updateExpandContext();
+      provider.refresh();
+    }),
   );
 
   const treeView = vscode.window.createTreeView('sparseExplorer.view', {
     treeDataProvider: provider,
     showCollapseAll: true,
   });
+
+  function updateExpandContext(): void {
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    const hasExpanded = expandStore.hasAnyExpanded();
+    const rootHasFilter = folders.some(
+      f => expandStore.isExpanded(f.uri.fsPath) && expandStore.hasFilter(f.uri.fsPath),
+    );
+    void vscode.commands.executeCommand('setContext', 'sparseExplorer.hasExpanded', hasExpanded);
+    void vscode.commands.executeCommand('setContext', 'sparseExplorer.rootHasFilter', rootHasFilter);
+  }
+
+  updateExpandContext();
 
   const cmds: vscode.Disposable[] = [
     vscode.commands.registerCommand('sparseExplorer.refresh', () => {
@@ -41,20 +61,34 @@ export function activate(context: vscode.ExtensionContext): void {
       admittedStore.eject(node.uri.fsPath);
     }),
 
-    vscode.commands.registerCommand('sparseExplorer.expandAll', (node: ExplorerNode) => {
-      expandStore.expand(node.uri.fsPath);
+    vscode.commands.registerCommand('sparseExplorer.expandAll', (node?: ExplorerNode) => {
+      if (node) {
+        expandStore.expand(node.uri.fsPath);
+      } else {
+        for (const f of vscode.workspace.workspaceFolders ?? []) {
+          expandStore.expand(f.uri.fsPath);
+        }
+      }
+      updateExpandContext();
       provider.refresh();
     }),
 
-    vscode.commands.registerCommand('sparseExplorer.collapseToFiltered', (node: ExplorerNode) => {
-      expandStore.collapse(node.uri.fsPath);
+    vscode.commands.registerCommand('sparseExplorer.collapseToFiltered', (node?: ExplorerNode) => {
+      if (node) {
+        expandStore.collapse(node.uri.fsPath);
+      } else {
+        expandStore.collapseAll();
+      }
+      updateExpandContext();
       provider.refresh();
     }),
 
     vscode.commands.registerCommand(
       'sparseExplorer.filterExpanded',
-      async (node: ExplorerNode) => {
-        const current = expandStore.getFilter(node.uri.fsPath);
+      async (node?: ExplorerNode) => {
+        const dirPath = node?.uri.fsPath ?? _expandedRootPath();
+        if (!dirPath) return;
+        const current = expandStore.getFilter(dirPath);
         const filter = await vscode.window.showInputBox({
           placeHolder: 'Filter files recursively...',
           value: current ?? '',
@@ -62,16 +96,24 @@ export function activate(context: vscode.ExtensionContext): void {
         });
         if (filter === undefined) return;
         if (filter === '') {
-          expandStore.clearFilter(node.uri.fsPath);
+          expandStore.clearFilter(dirPath);
         } else {
-          expandStore.setFilter(node.uri.fsPath, filter);
+          expandStore.setFilter(dirPath, filter);
         }
+        updateExpandContext();
         provider.refresh();
       },
     ),
 
-    vscode.commands.registerCommand('sparseExplorer.clearFilter', (node: ExplorerNode) => {
-      expandStore.clearFilter(node.uri.fsPath);
+    vscode.commands.registerCommand('sparseExplorer.clearFilter', (node?: ExplorerNode) => {
+      if (node) {
+        expandStore.clearFilter(node.uri.fsPath);
+      } else {
+        for (const f of vscode.workspace.workspaceFolders ?? []) {
+          expandStore.clearFilter(f.uri.fsPath);
+        }
+      }
+      updateExpandContext();
       provider.refresh();
     }),
 
@@ -87,6 +129,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (uri.scheme !== 'file') return;
       if (!vscode.workspace.getWorkspaceFolder(uri)) return;
       if (!admittedStore.has(uri.fsPath)) return;
+      if (expandStore.hasAnyExpanded()) return;
       void Promise.resolve(
         treeView.reveal(
           { uri, isDirectory: false, isWorkspaceRoot: false, inExpandedContext: false },
