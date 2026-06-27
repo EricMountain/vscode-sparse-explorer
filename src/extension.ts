@@ -5,10 +5,14 @@ import { ExplorerNode, FilteredExplorerProvider } from './FilteredExplorerProvid
 import { TabTracker } from './TabTracker';
 
 export function activate(context: vscode.ExtensionContext): void {
+  const out = vscode.window.createOutputChannel('Sparse Explorer Debug');
+  context.subscriptions.push(out);
+  const log = (msg: string): void => out.appendLine(`${new Date().toISOString().slice(11, 23)} ${msg}`);
+
   const tabTracker = new TabTracker();
   const admittedStore = new AdmittedStore(context);
   const expandStore = new ExpandStore();
-  const provider = new FilteredExplorerProvider(tabTracker, admittedStore, expandStore);
+  const provider = new FilteredExplorerProvider(tabTracker, admittedStore, expandStore, log);
 
   // Admit all tabs already open at startup
   admittedStore.admitAll([...tabTracker.tabPaths]);
@@ -52,67 +56,139 @@ export function activate(context: vscode.ExtensionContext): void {
 
   updateExpandContext();
 
+  // VS Code ignores a changed TreeItem.collapsibleState on an already-rendered row
+  // and offers no API to collapse a single node. So expansion must be driven through
+  // reveal (to open rows) and the built-in collapse-all command (to fold them up).
+  async function revealExpanded(nodes: ExplorerNode[]): Promise<void> {
+    for (const n of nodes) {
+      try {
+        await treeView.reveal(n, { expand: true, select: false, focus: false });
+      } catch (e) {
+        log(`reveal failed for ${n.uri.fsPath}: ${String(e)}`);
+      }
+    }
+  }
+
+  async function collapseAllRows(): Promise<void> {
+    try {
+      await vscode.commands.executeCommand(
+        'workbench.actions.treeView.sparseExplorer.view.collapseAll',
+      );
+    } catch (e) {
+      log(`built-in collapseAll failed: ${String(e)}`);
+    }
+  }
+
+  async function promptFilter(dirPath: string): Promise<void> {
+    const current = expandStore.getFilter(dirPath);
+    const filter = await vscode.window.showInputBox({
+      placeHolder: 'Filter files recursively...',
+      value: current ?? '',
+      prompt: 'Type to filter files within this directory (leave empty to show all)',
+    });
+    if (filter === undefined) return;
+    if (filter === '') {
+      expandStore.clearFilter(dirPath);
+    } else {
+      expandStore.setFilter(dirPath, filter);
+    }
+    updateExpandContext();
+    provider.refresh();
+  }
+
+  // Title-bar commands act on the whole tree and ignore any argument: VS Code passes
+  // the current tree selection to title-bar actions, which must not be mistaken for a
+  // target. Item commands (the *Dir variants) act on the directory node they receive.
+
+  function expandRoots(): ExplorerNode[] {
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    for (const f of folders) expandStore.expand(f.uri.fsPath);
+    updateExpandContext();
+    provider.refresh();
+    // Single-folder roots aren't rows (their children render at the top level and
+    // re-fetch in expanded scope on refresh); only multi-root rows need revealing.
+    return folders.length > 1
+      ? folders.map(f => ({ uri: f.uri, isDirectory: true, isWorkspaceRoot: true }))
+      : [];
+  }
+
   const cmds: vscode.Disposable[] = [
     vscode.commands.registerCommand('sparseExplorer.refresh', () => {
       provider.refresh();
     }),
 
-    vscode.commands.registerCommand('sparseExplorer.ejectItem', (node: ExplorerNode) => {
-      admittedStore.eject(node.uri.fsPath);
+    vscode.commands.registerCommand('sparseExplorer.ejectItem', async (node: ExplorerNode) => {
+      const fsPath = node.uri.fsPath;
+      admittedStore.eject(fsPath);
+
+      // Keep the view and the open tabs consistent: removing a file from the view
+      // also closes its tab, otherwise an ejected file would linger as an open tab
+      // and be re-admitted the moment it regained focus.
+      const tabs = vscode.window.tabGroups.all
+        .flatMap(g => g.tabs)
+        .filter(t => t.input instanceof vscode.TabInputText && t.input.uri.fsPath === fsPath);
+      if (tabs.length > 0) {
+        await vscode.window.tabGroups.close(tabs);
+      }
     }),
 
-    vscode.commands.registerCommand('sparseExplorer.expandAll', (node?: ExplorerNode) => {
-      if (node) {
-        expandStore.expand(node.uri.fsPath);
-      } else {
-        for (const f of vscode.workspace.workspaceFolders ?? []) {
-          expandStore.expand(f.uri.fsPath);
-        }
+    // --- Title-bar (whole tree) ---
+
+    vscode.commands.registerCommand('sparseExplorer.expandAll', async () => {
+      log('CMD expandAll (title-bar: all roots)');
+      await revealExpanded(expandRoots());
+    }),
+
+    vscode.commands.registerCommand('sparseExplorer.collapseToFiltered', async () => {
+      log('CMD collapseToFiltered (title-bar: all)');
+      expandStore.collapseAll();
+      updateExpandContext();
+      provider.refresh();
+      await collapseAllRows();
+    }),
+
+    vscode.commands.registerCommand('sparseExplorer.filterExpanded', async () => {
+      const dirPath = _expandedRootPath();
+      if (!dirPath) return;
+      await promptFilter(dirPath);
+    }),
+
+    vscode.commands.registerCommand('sparseExplorer.clearFilter', () => {
+      for (const f of vscode.workspace.workspaceFolders ?? []) {
+        expandStore.clearFilter(f.uri.fsPath);
       }
       updateExpandContext();
       provider.refresh();
     }),
 
-    vscode.commands.registerCommand('sparseExplorer.collapseToFiltered', (node?: ExplorerNode) => {
-      if (node) {
-        expandStore.collapse(node.uri.fsPath);
-      } else {
-        expandStore.collapseAll();
-      }
+    // --- Item (single directory) ---
+
+    vscode.commands.registerCommand('sparseExplorer.expandDir', async (node?: ExplorerNode) => {
+      if (!node || !node.isDirectory) return;
+      log(`CMD expandDir ${node.uri.fsPath}`);
+      expandStore.expand(node.uri.fsPath);
       updateExpandContext();
       provider.refresh();
+      await revealExpanded([node]);
     }),
 
-    vscode.commands.registerCommand(
-      'sparseExplorer.filterExpanded',
-      async (node?: ExplorerNode) => {
-        const dirPath = node?.uri.fsPath ?? _expandedRootPath();
-        if (!dirPath) return;
-        const current = expandStore.getFilter(dirPath);
-        const filter = await vscode.window.showInputBox({
-          placeHolder: 'Filter files recursively...',
-          value: current ?? '',
-          prompt: 'Type to filter files within this directory (leave empty to show all)',
-        });
-        if (filter === undefined) return;
-        if (filter === '') {
-          expandStore.clearFilter(dirPath);
-        } else {
-          expandStore.setFilter(dirPath, filter);
-        }
-        updateExpandContext();
-        provider.refresh();
-      },
-    ),
+    vscode.commands.registerCommand('sparseExplorer.collapseDir', async (node?: ExplorerNode) => {
+      if (!node || !node.isDirectory) return;
+      log(`CMD collapseDir ${node.uri.fsPath}`);
+      expandStore.collapse(node.uri.fsPath);
+      updateExpandContext();
+      provider.refresh();
+      await collapseAllRows();
+    }),
 
-    vscode.commands.registerCommand('sparseExplorer.clearFilter', (node?: ExplorerNode) => {
-      if (node) {
-        expandStore.clearFilter(node.uri.fsPath);
-      } else {
-        for (const f of vscode.workspace.workspaceFolders ?? []) {
-          expandStore.clearFilter(f.uri.fsPath);
-        }
-      }
+    vscode.commands.registerCommand('sparseExplorer.filterDir', async (node?: ExplorerNode) => {
+      if (!node || !node.isDirectory) return;
+      await promptFilter(node.uri.fsPath);
+    }),
+
+    vscode.commands.registerCommand('sparseExplorer.clearFilterDir', (node?: ExplorerNode) => {
+      if (!node || !node.isDirectory) return;
+      expandStore.clearFilter(node.uri.fsPath);
       updateExpandContext();
       provider.refresh();
     }),
@@ -132,7 +208,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (expandStore.hasAnyExpanded()) return;
       void Promise.resolve(
         treeView.reveal(
-          { uri, isDirectory: false, isWorkspaceRoot: false, inExpandedContext: false },
+          { uri, isDirectory: false, isWorkspaceRoot: false },
           { select: true, focus: false },
         ),
       ).catch(() => undefined);
