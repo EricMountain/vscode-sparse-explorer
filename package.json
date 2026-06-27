@@ -24,7 +24,7 @@
         {
           "id": "sparseExplorer",
           "title": "Sparse Explorer",
-          "icon": "resources/filter.svg"
+          "icon": "resources/sparse-explorer.svg"
         }
       ]
     },

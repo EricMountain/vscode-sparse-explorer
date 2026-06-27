@@ -95,7 +95,7 @@ src/
     pathUtils.ts                — computes which ancestor dirs are visible
     fsUtils.ts                  — async readdir and recursive descendant matching
 resources/
-  filter.svg                    — activity bar icon
+  sparse-explorer.svg           — activity bar icon
 ```
 
 ### Scripts
@@ -105,3 +105,10 @@ resources/
 | `npm run compile` | One-shot TypeScript build |
 | `npm run watch` | Rebuild on file changes |
 | `npm run package` | Compile and produce a `.vsix` installable package |
+
+## Credits
+
+The activity bar icon (`resources/sparse-explorer.svg`) is derived from the
+**files** icon in Microsoft's [VS Code codicons](https://github.com/microsoft/vscode-codicons),
+licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), with a
+funnel added to indicate the filtered view.
