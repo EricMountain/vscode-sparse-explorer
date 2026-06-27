@@ -116,7 +116,7 @@ export class FilteredExplorerProvider implements vscode.TreeDataProvider<Explore
       };
       item.contextValue = 'seFile';
       if (this.tabTracker.tabPaths.has(fsPath)) {
-        item.description = 'open';
+        item.description = '•';
       }
     }
 
