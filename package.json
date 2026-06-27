@@ -106,29 +106,29 @@
     "menus": {
       "view/title": [
         {
-          "command": "sparseExplorer.expandAll",
-          "when": "view == sparseExplorer.view && !sparseExplorer.hasExpanded",
-          "group": "navigation"
-        },
-        {
           "command": "sparseExplorer.filterExpanded",
           "when": "view == sparseExplorer.view && sparseExplorer.hasExpanded && !sparseExplorer.rootHasFilter",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "sparseExplorer.clearFilter",
           "when": "view == sparseExplorer.view && sparseExplorer.rootHasFilter",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "command": "sparseExplorer.expandAll",
+          "when": "view == sparseExplorer.view && !sparseExplorer.hasExpanded",
+          "group": "navigation@2"
         },
         {
           "command": "sparseExplorer.collapseToFiltered",
           "when": "view == sparseExplorer.view && sparseExplorer.hasExpanded",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "sparseExplorer.refresh",
           "when": "view == sparseExplorer.view",
-          "group": "navigation"
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
