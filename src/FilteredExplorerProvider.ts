@@ -25,11 +25,9 @@ export class FilteredExplorerProvider implements vscode.TreeDataProvider<Explore
     private readonly tabTracker: TabTracker,
     private readonly admittedStore: AdmittedStore,
     private readonly expandStore: ExpandStore,
-    private readonly log: (msg: string) => void = () => {},
   ) {}
 
   refresh(): void {
-    this.log('refresh() -> fire onDidChangeTreeData(undefined)');
     this._onDidChangeTreeData.fire();
   }
 
@@ -146,15 +144,11 @@ export class FilteredExplorerProvider implements vscode.TreeDataProvider<Explore
     return this._childrenOf(node.uri.fsPath);
   }
 
-  private async _childrenOf(dirPath: string): Promise<ExplorerNode[]> {
+  private _childrenOf(dirPath: string): Promise<ExplorerNode[]> {
     const scope = this._scopeFor(dirPath);
-    const nodes = scope.expanded
-      ? await this._getExpandedChildren(dirPath, scope.filter)
-      : await this._getFilteredChildren(dirPath);
-    this.log(
-      `getChildren(${path.basename(dirPath)}) scope=${scope.expanded ? 'EXPANDED' : 'filtered'} -> ${nodes.length} items`,
-    );
-    return nodes;
+    return scope.expanded
+      ? this._getExpandedChildren(dirPath, scope.filter)
+      : this._getFilteredChildren(dirPath);
   }
 
   private async _getFilteredChildren(dirPath: string): Promise<ExplorerNode[]> {

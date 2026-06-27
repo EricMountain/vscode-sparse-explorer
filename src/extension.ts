@@ -5,14 +5,10 @@ import { ExplorerNode, FilteredExplorerProvider } from './FilteredExplorerProvid
 import { TabTracker } from './TabTracker';
 
 export function activate(context: vscode.ExtensionContext): void {
-  const out = vscode.window.createOutputChannel('Sparse Explorer Debug');
-  context.subscriptions.push(out);
-  const log = (msg: string): void => out.appendLine(`${new Date().toISOString().slice(11, 23)} ${msg}`);
-
   const tabTracker = new TabTracker();
   const admittedStore = new AdmittedStore(context);
   const expandStore = new ExpandStore();
-  const provider = new FilteredExplorerProvider(tabTracker, admittedStore, expandStore, log);
+  const provider = new FilteredExplorerProvider(tabTracker, admittedStore, expandStore);
 
   // Admit all tabs already open at startup
   admittedStore.admitAll([...tabTracker.tabPaths]);
@@ -61,22 +57,20 @@ export function activate(context: vscode.ExtensionContext): void {
   // reveal (to open rows) and the built-in collapse-all command (to fold them up).
   async function revealExpanded(nodes: ExplorerNode[]): Promise<void> {
     for (const n of nodes) {
-      try {
-        await treeView.reveal(n, { expand: true, select: false, focus: false });
-      } catch (e) {
-        log(`reveal failed for ${n.uri.fsPath}: ${String(e)}`);
-      }
+      await treeView.reveal(n, { expand: true, select: false, focus: false }).then(
+        () => undefined,
+        () => undefined,
+      );
     }
   }
 
   async function collapseAllRows(): Promise<void> {
-    try {
-      await vscode.commands.executeCommand(
-        'workbench.actions.treeView.sparseExplorer.view.collapseAll',
+    await vscode.commands
+      .executeCommand('workbench.actions.treeView.sparseExplorer.view.collapseAll')
+      .then(
+        () => undefined,
+        () => undefined,
       );
-    } catch (e) {
-      log(`built-in collapseAll failed: ${String(e)}`);
-    }
   }
 
   async function promptFilter(dirPath: string): Promise<void> {
@@ -135,12 +129,10 @@ export function activate(context: vscode.ExtensionContext): void {
     // --- Title-bar (whole tree) ---
 
     vscode.commands.registerCommand('sparseExplorer.expandAll', async () => {
-      log('CMD expandAll (title-bar: all roots)');
       await revealExpanded(expandRoots());
     }),
 
     vscode.commands.registerCommand('sparseExplorer.collapseToFiltered', async () => {
-      log('CMD collapseToFiltered (title-bar: all)');
       expandStore.collapseAll();
       updateExpandContext();
       provider.refresh();
@@ -165,7 +157,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand('sparseExplorer.expandDir', async (node?: ExplorerNode) => {
       if (!node || !node.isDirectory) return;
-      log(`CMD expandDir ${node.uri.fsPath}`);
       expandStore.expand(node.uri.fsPath);
       updateExpandContext();
       provider.refresh();
@@ -174,7 +165,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand('sparseExplorer.collapseDir', async (node?: ExplorerNode) => {
       if (!node || !node.isDirectory) return;
-      log(`CMD collapseDir ${node.uri.fsPath}`);
       expandStore.collapse(node.uri.fsPath);
       updateExpandContext();
       provider.refresh();
