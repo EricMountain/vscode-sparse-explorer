@@ -32,11 +32,10 @@ found root causes in minutes that hours of theorizing got wrong. Remove the logg
 
 ## CI / automated releases
 
-Three GitHub Actions workflows live in `.github/workflows/`:
+Two GitHub Actions workflows live in `.github/workflows/`:
 
 - **`ci.yml`** — runs `npm test` on every push to `main` and every PR. On a `v*` tag push it additionally runs `npm run package` and creates a GitHub Release with the `.vsix` attached.
-- **`auto-merge.yml`** — when Dependabot opens or updates a PR, approves it and enables GitHub's native auto-merge (squash). Auto-merge only fires once all required status checks pass, so tests must be green first.
-- **`auto-release.yml`** — when a Dependabot PR is merged, bumps the patch version in `package.json` / `package-lock.json`, commits it as `chore: release vX.Y.Z`, creates a `vX.Y.Z` tag, and pushes both. That tag push triggers the release job in `ci.yml`.
+- **`auto-merge.yml`** — triggers via `workflow_run` once CI passes on a `dependabot/**` branch. Finds the open Dependabot PR, verifies the head SHA matches what CI tested, squash-merges it, then bumps the patch version, commits it as `chore: release vX.Y.Z`, creates a `vX.Y.Z` tag, and pushes both. The tag push triggers the release job in `ci.yml`. Everything is in one job because merges made with `GITHUB_TOKEN` suppress downstream `pull_request` events, so a separate release workflow would never fire.
 
 Dependabot is configured in `.github/dependabot.yml` to open a single grouped npm PR each Monday.
 
