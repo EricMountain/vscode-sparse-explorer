@@ -30,6 +30,22 @@ invocations (with their `node` arg), `getChildren` calls (path + computed scope 
 and refresh/reveal/collapse calls. Ask the user to reproduce and paste the Output panel. This
 found root causes in minutes that hours of theorizing got wrong. Remove the logging once fixed.
 
+## CI / automated releases
+
+Three GitHub Actions workflows live in `.github/workflows/`:
+
+- **`ci.yml`** — runs `npm test` on every push to `main` and every PR. On a `v*` tag push it additionally runs `npm run package` and creates a GitHub Release with the `.vsix` attached.
+- **`auto-merge.yml`** — when Dependabot opens or updates a PR, approves it and enables GitHub's native auto-merge (squash). Auto-merge only fires once all required status checks pass, so tests must be green first.
+- **`auto-release.yml`** — when a Dependabot PR is merged, bumps the patch version in `package.json` / `package-lock.json`, commits it as `chore: release vX.Y.Z`, creates a `vX.Y.Z` tag, and pushes both. That tag push triggers the release job in `ci.yml`.
+
+Dependabot is configured in `.github/dependabot.yml` to open a single grouped npm PR each Monday.
+
+**Required one-time setup**: go to **Settings → Branches → Add branch protection rule** for `main`, enable "Require status checks to pass before merging", and select the `test` job. Without this, auto-merge fires immediately without waiting for CI.
+
+**Branch protection caveat**: if you later enable strict branch protection that blocks direct pushes, the `auto-release` workflow's `git push origin main` will fail. The workflow file contains a comment explaining how to swap in a PAT (`secrets.GH_PAT`) to work around this.
+
+To cut a manual release, tag any commit: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
 ## VS Code TreeView gotchas (learned the hard way)
 
 These caused a long debugging session; respect them.
