@@ -47,7 +47,7 @@ jobs:
           gh pr merge "$PR_NUMBER" --squash
           echo "merged=true" >> $GITHUB_OUTPUT
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         if: steps.merge.outputs.merged == 'true'
         with:
           ref: main
