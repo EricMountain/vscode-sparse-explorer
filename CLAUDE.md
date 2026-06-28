@@ -40,9 +40,9 @@ Three GitHub Actions workflows live in `.github/workflows/`:
 
 Dependabot is configured in `.github/dependabot.yml` to open a single grouped npm PR each Monday.
 
-**Required one-time setup**:
-1. **Settings → Actions → General** → enable "Allow GitHub Actions to create and approve pull requests". Without this the approve step in `auto-merge.yml` returns 403.
-2. **Settings → Branches → Add branch protection rule** for `main`, enable "Require status checks to pass before merging", and select the `test` job. Without this, auto-merge fires immediately without waiting for CI.
+**Required one-time setup**: **Settings → Actions → General** → enable "Allow GitHub Actions to create and approve pull requests". Without this `auto-merge.yml` cannot merge PRs.
+
+**Optional but recommended**: **Settings → Branches → Add branch protection rule** for `main`, enable "Require status checks to pass before merging", and select the `test` job. The `auto-merge.yml` workflow already gates on CI passing (it fires from `workflow_run` after CI succeeds), but branch protection adds a second line of defence against direct pushes bypassing CI.
 
 **Branch protection caveat**: if you later enable strict branch protection that blocks direct pushes, the `auto-release` workflow's `git push origin main` will fail. The workflow file contains a comment explaining how to swap in a PAT (`secrets.GH_PAT`) to work around this.
 
