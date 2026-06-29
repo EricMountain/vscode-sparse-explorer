@@ -45,7 +45,18 @@ Dependabot is configured in `.github/dependabot.yml` to open a single grouped np
 
 **Branch protection caveat**: if you later enable strict branch protection that blocks direct pushes, the `auto-release` workflow's `git push origin main` will fail. The workflow file contains a comment explaining how to swap in a PAT (`secrets.GH_PAT`) to work around this.
 
-To cut a manual release, tag any commit: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+To cut a manual release, bump `package.json` first, then tag:
+
+```sh
+npm version patch --no-git-tag-version   # or minor/major
+VERSION=$(node -p "require('./package.json').version")
+git add package.json package-lock.json
+git commit -m "chore: release v${VERSION}"
+git tag "v${VERSION}"
+git push origin main "v${VERSION}"
+```
+
+The `release` job in `ci.yml` validates that `package.json`'s version matches the pushed tag and fails before packaging if they diverge.
 
 ## VS Code TreeView gotchas (learned the hard way)
 
