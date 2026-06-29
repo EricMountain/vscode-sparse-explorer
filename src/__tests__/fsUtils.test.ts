@@ -38,15 +38,14 @@ describe('readDir', () => {
     expect(entries[0].fullPath).toBe(path.join(tmpDir, 'foo.ts'));
   });
 
-  // Regression: dotfiles must be excluded except .env
-  test('excludes dotfiles but includes .env', async () => {
+  test('includes dotfiles and dot-directories', async () => {
     await fs.mkdir(path.join(tmpDir, '.git'));
     await fs.writeFile(path.join(tmpDir, '.gitignore'), '');
     await fs.writeFile(path.join(tmpDir, '.env'), '');
     await fs.writeFile(path.join(tmpDir, 'visible.ts'), '');
     const entries = await readDir(tmpDir);
     const names = entries.map(e => e.name).sort();
-    expect(names).toEqual(['.env', 'visible.ts']);
+    expect(names).toEqual(['.env', '.git', '.gitignore', 'visible.ts']);
   });
 
   test('returns empty array for a non-existent directory', async () => {
