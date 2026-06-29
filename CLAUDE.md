@@ -96,7 +96,7 @@ These caused a long debugging session; respect them.
   in sync when adding states.
 - Eject ("Remove from View") both de-admits the path *and* closes its tab, so an ejected file
   isn't silently re-admitted when it regains focus.
-- `readDir` (in `utils/fsUtils.ts`) hides dotfiles except `.env`.
+- `readDir` (in `utils/fsUtils.ts`) shows all entries including dotfiles and dot-directories.
 
 ## Git
 
