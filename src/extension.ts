@@ -221,6 +221,7 @@ export function activate(context: vscode.ExtensionContext): void {
     if (uri.scheme !== 'file') return;
     if (!vscode.workspace.getWorkspaceFolder(uri)) return;
     if (!admittedStore.has(uri.fsPath)) return;
+    if (!treeView.visible) return;
     if (expandStore.hasAnyExpanded()) return;
     void treeView
       .reveal({ uri, isDirectory: false, isWorkspaceRoot: false }, { select: true, focus: false })
