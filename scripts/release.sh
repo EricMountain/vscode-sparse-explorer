@@ -65,7 +65,7 @@ if [[ "$ACTUAL" != "$VERSION" ]]; then
     exit 1
 fi
 
-git tag "v${VERSION}"
+git tag -a "v${VERSION}" -m "Release v${VERSION}"
 git push origin "v${VERSION}"
 
 echo "Done — v${VERSION} tagged and pushed. CI will build and publish the .vsix."
