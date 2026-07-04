@@ -2,7 +2,7 @@
   "name": "vscode-sparse-explorer",
   "displayName": "VSCode Sparse Explorer",
   "description": "A sparse explorer showing only open tabs and pinned files, with expand-all and recursive filter per directory",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "publisher": "eric-mountain",
   "repository": {
     "type": "git",
