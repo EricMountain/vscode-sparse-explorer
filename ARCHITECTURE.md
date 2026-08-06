@@ -214,6 +214,8 @@ This is called on every `_getFilteredChildren` invocation, so it always reflects
 
 ## `readDir` and `hasMatchingDescendant` (`src/utils/fsUtils.ts`)
 
-`readDir` wraps `fs.readdir` and filters out dotfiles (except `.env`). Returns `{ name, fullPath, isDirectory }` entries.
+`readDir` wraps `fs.readdir` and returns `{ name, fullPath, isDirectory }` entries, including dotfiles and dot-directories.
 
-`hasMatchingDescendant(dir, filter)` recursively walks the filesystem from `dir` to find any file whose name contains `filter` (case-insensitive). It is used by `_getExpandedChildren` to decide whether to include a subdirectory when a filter is active.
+Symlinks get an extra `stat()`: a `Dirent` for a symlink reports `isDirectory() === false` even when it points at a directory, which would render a symlinked directory as a leaf file. Following the link makes it expand like it does in the built-in explorer. A broken link fails to stat and stays a leaf. `fullPath` keeps the symlink path, never the resolved target, so the tree's paths stay inside the workspace and match the URIs of tabs opened through them.
+
+`hasMatchingDescendant(dir, filter)` recursively walks the filesystem from `dir` to find any file whose name contains `filter` (case-insensitive). It is used by `_getExpandedChildren` to decide whether to include a subdirectory when a filter is active. Because it descends through symlinked directories, it carries a set of already-visited real paths so a symlink cycle terminates.
