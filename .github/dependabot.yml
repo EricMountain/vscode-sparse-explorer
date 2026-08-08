@@ -10,6 +10,13 @@ updates:
       dependencies:
         patterns:
           - '*'
+    ignore:
+      # ts-jest's peerDependencies cap typescript at "<7" (see PR #39), so a
+      # grouped major bump breaks `npm ci` with ERESOLVE. Remove this once
+      # ts-jest supports TypeScript 7 — check with:
+      #   npm view ts-jest peerDependencies
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
