@@ -24,6 +24,20 @@ git pull --ff-only origin main
 
 npm version "$BUMP" --no-git-tag-version
 VERSION=$(node -p "require('./package.json').version")
+
+ATTEMPTS=0
+while git rev-parse "v${VERSION}" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null 2>&1; do
+    ATTEMPTS=$((ATTEMPTS + 1))
+    if [[ "$ATTEMPTS" -ge 20 ]]; then
+        echo "Gave up after $ATTEMPTS versions still had existing tags — something is wrong." >&2
+        git checkout -- package.json package-lock.json
+        exit 1
+    fi
+    echo "Tag v${VERSION} already exists — bumping again." >&2
+    npm version "$BUMP" --no-git-tag-version
+    VERSION=$(node -p "require('./package.json').version")
+done
+
 BRANCH="release/v${VERSION}"
 
 git checkout -b "$BRANCH"
