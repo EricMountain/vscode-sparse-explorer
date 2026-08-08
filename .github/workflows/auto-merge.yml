@@ -15,6 +15,7 @@ jobs:
   merge-and-release:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Merge Dependabot PR
         id: merge
@@ -47,21 +48,96 @@ jobs:
           gh pr merge "$PR_NUMBER" --squash
           echo "merged=true" >> $GITHUB_OUTPUT
 
+      # RELEASE_TOKEN must be a PAT (or GitHub App token), not GITHUB_TOKEN:
+      # branches pushed / PRs opened / tags pushed with GITHUB_TOKEN do not
+      # trigger downstream workflow runs, so the release PR's required "test"
+      # check would never run and auto-merge would hang forever, and a tag
+      # pushed that way would never trigger the CI "release" job either.
       - uses: actions/checkout@v7
         if: steps.merge.outputs.merged == 'true'
         with:
           ref: main
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
 
-      - name: Bump version and push tag
+      - name: Open release PR
+        id: release
         if: steps.merge.outputs.merged == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --ff-only origin main
+
           npm version patch --no-git-tag-version
-          VERSION=$(jq -r .version package.json)
+          VERSION=$(node -p "require('./package.json').version")
+
+          ATTEMPTS=0
+          while git rev-parse "v${VERSION}" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null 2>&1; do
+            ATTEMPTS=$((ATTEMPTS + 1))
+            if [ "$ATTEMPTS" -ge 20 ]; then
+              echo "Gave up after $ATTEMPTS versions still had existing tags — something is wrong." >&2
+              exit 1
+            fi
+            echo "Tag v${VERSION} already exists — bumping again." >&2
+            npm version patch --no-git-tag-version
+            VERSION=$(node -p "require('./package.json').version")
+          done
+
+          BRANCH="release/v${VERSION}"
+
+          git checkout -b "$BRANCH"
           git add package.json package-lock.json
           git commit -m "chore: release v${VERSION}"
-          git tag "v${VERSION}"
-          git push origin main
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "chore: release v${VERSION}" \
+            --body "Automated version bump to \`v${VERSION}\` following a merged Dependabot PR." \
+            --base main \
+            --head "$BRANCH")
+
+          gh pr merge --auto --squash "$PR_URL"
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for release PR to merge
+        if: steps.merge.outputs.merged == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          PR_URL="${{ steps.release.outputs.pr_url }}"
+          while true; do
+            STATE=$(gh pr view "$PR_URL" --json state --jq '.state')
+            if [ "$STATE" == "MERGED" ]; then
+              break
+            elif [ "$STATE" == "CLOSED" ]; then
+              echo "Release PR was closed without merging." >&2
+              exit 1
+            fi
+            echo "  PR state: $STATE — checking again in 20s..."
+            sleep 20
+          done
+
+      - name: Tag release
+        if: steps.merge.outputs.merged == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          VERSION="${{ steps.release.outputs.version }}"
+
+          git checkout main
+          git pull --ff-only origin main
+
+          ACTUAL=$(node -p "require('./package.json').version")
+          if [ "$ACTUAL" != "$VERSION" ]; then
+            echo "Version mismatch after merge: expected $VERSION, got $ACTUAL." >&2
+            exit 1
+          fi
+
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
           git push origin "v${VERSION}"
