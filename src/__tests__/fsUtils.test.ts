@@ -52,6 +52,38 @@ describe('readDir', () => {
     const entries = await readDir(path.join(tmpDir, 'does-not-exist'));
     expect(entries).toEqual([]);
   });
+
+  test('a symlink to a directory reports isDirectory true', async () => {
+    await fs.mkdir(path.join(tmpDir, 'target'));
+    await fs.symlink(path.join(tmpDir, 'target'), path.join(tmpDir, 'link'));
+    const entries = await readDir(tmpDir);
+    const link = entries.find(e => e.name === 'link')!;
+    expect(link.isDirectory).toBe(true);
+    expect(link.fullPath).toBe(path.join(tmpDir, 'link'));
+  });
+
+  test('a symlink to a file reports isDirectory false', async () => {
+    await fs.writeFile(path.join(tmpDir, 'target.ts'), '');
+    await fs.symlink(path.join(tmpDir, 'target.ts'), path.join(tmpDir, 'link.ts'));
+    const entries = await readDir(tmpDir);
+    expect(entries.find(e => e.name === 'link.ts')!.isDirectory).toBe(false);
+  });
+
+  test('a broken symlink is listed as a non-directory', async () => {
+    await fs.symlink(path.join(tmpDir, 'gone'), path.join(tmpDir, 'dangling'));
+    const entries = await readDir(tmpDir);
+    const dangling = entries.find(e => e.name === 'dangling')!;
+    expect(dangling).toBeDefined();
+    expect(dangling.isDirectory).toBe(false);
+  });
+
+  test('lists the contents of a symlinked directory', async () => {
+    await fs.mkdir(path.join(tmpDir, 'target'));
+    await fs.writeFile(path.join(tmpDir, 'target', 'inside.ts'), '');
+    await fs.symlink(path.join(tmpDir, 'target'), path.join(tmpDir, 'link'));
+    const entries = await readDir(path.join(tmpDir, 'link'));
+    expect(entries.map(e => e.name)).toEqual(['inside.ts']);
+  });
 });
 
 describe('hasMatchingDescendant', () => {
@@ -85,5 +117,22 @@ describe('hasMatchingDescendant', () => {
     await fs.mkdir(path.join(tmpDir, 'tests'));
     // 'tests' dir exists but has no files inside — no file name contains 'test'
     expect(await hasMatchingDescendant(tmpDir, 'test')).toBe(false);
+  });
+
+  test('descends through a symlinked directory', async () => {
+    const target = path.join(tmpDir, 'target');
+    await fs.mkdir(target);
+    await fs.writeFile(path.join(target, 'button.spec.ts'), '');
+    const root = path.join(tmpDir, 'root');
+    await fs.mkdir(root);
+    await fs.symlink(target, path.join(root, 'link'));
+    expect(await hasMatchingDescendant(root, 'spec')).toBe(true);
+  });
+
+  test('terminates on a symlink cycle', async () => {
+    const a = path.join(tmpDir, 'a');
+    await fs.mkdir(a);
+    await fs.symlink(tmpDir, path.join(a, 'loop'));
+    expect(await hasMatchingDescendant(tmpDir, 'nomatch')).toBe(false);
   });
 });

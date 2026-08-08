@@ -200,6 +200,56 @@ describe('getChildren', () => {
     expect(names).not.toContain('README.md');
   });
 
+  describe('a directory symlinked into the workspace', () => {
+    // Target lives outside the workspace, as a symlinked dir typically would.
+    let external: string;
+
+    beforeEach(async () => {
+      external = await fs.mkdtemp(path.join(os.tmpdir(), 'sparse-external-'));
+      await fs.writeFile(path.join(external, 'linked.ts'), '');
+      await fs.symlink(external, path.join(tmpDir, 'linkdir'));
+    });
+
+    afterEach(async () => {
+      await fs.rm(external, { recursive: true });
+    });
+
+    test('expanded mode: renders as a directory, not a leaf file', async () => {
+      admittedStore.paths = new Set<string>();
+      const expandStore = new ExpandStore();
+      expandStore.expand(tmpDir);
+      const children = await makeProvider(expandStore).getChildren();
+      const link = children.find(n => path.basename(n.uri.fsPath) === 'linkdir')!;
+      expect(link).toBeDefined();
+      expect(link.isDirectory).toBe(true);
+    });
+
+    test('expanded mode: its contents are listed', async () => {
+      admittedStore.paths = new Set<string>();
+      const expandStore = new ExpandStore();
+      expandStore.expand(tmpDir);
+      const provider = makeProvider(expandStore);
+      const link = (await provider.getChildren()).find(
+        n => path.basename(n.uri.fsPath) === 'linkdir',
+      )!;
+      const grandchildren = await provider.getChildren(link);
+      expect(grandchildren.map(n => path.basename(n.uri.fsPath))).toEqual(['linked.ts']);
+    });
+
+    test('filtered mode: an admitted file underneath makes it visible as a directory', async () => {
+      admittedStore.paths = new Set([path.join(tmpDir, 'linkdir', 'linked.ts')]);
+      const expandStore = new ExpandStore();
+      const provider = makeProvider(expandStore);
+      const link = (await provider.getChildren()).find(
+        n => path.basename(n.uri.fsPath) === 'linkdir',
+      )!;
+      expect(link).toBeDefined();
+      expect(link.isDirectory).toBe(true);
+      const grandchildren = await provider.getChildren(link);
+      expect(grandchildren.map(n => path.basename(n.uri.fsPath))).toEqual(['linked.ts']);
+    });
+  });
+
   test('dirs sort before files within the same level', async () => {
     admittedStore.paths = new Set([
       path.join(tmpDir, 'src', 'a.ts'),
