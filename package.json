@@ -9,7 +9,7 @@
     "url": "https://github.com/EricMountain/vscode-sparse-explorer"
   },
   "engines": {
-    "vscode": "^1.74.0"
+    "vscode": "^1.138.0"
   },
   "icon": "resources/sparse-explorer-icon.png",
   "categories": [
