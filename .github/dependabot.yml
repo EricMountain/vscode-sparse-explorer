@@ -11,6 +11,9 @@ updates:
         patterns:
           - '*'
     ignore:
+      # @types/vscode must not exceed engines.vscode (vsce rejects it). Bump
+      # both together by hand when raising the minimum supported VS Code.
+      - dependency-name: '@types/vscode'
       # ts-jest's peerDependencies cap typescript at "<7" (see PR #39), so a
       # grouped major bump breaks `npm ci` with ERESOLVE. Remove this once
       # ts-jest supports TypeScript 7 — check with:
