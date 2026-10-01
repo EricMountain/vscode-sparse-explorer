@@ -370,12 +370,12 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand('sparseExplorer.copyPath', (node?: ExplorerNode) => {
       if (!node) return;
-      void vscode.commands.executeCommand('copyFilePath', node.uri);
+      void vscode.env.clipboard.writeText(node.uri.fsPath);
     }),
 
     vscode.commands.registerCommand('sparseExplorer.copyRelativePath', (node?: ExplorerNode) => {
       if (!node) return;
-      void vscode.commands.executeCommand('copyRelativePath', node.uri);
+      void vscode.env.clipboard.writeText(vscode.workspace.asRelativePath(node.uri, false));
     }),
 
     vscode.commands.registerCommand('sparseExplorer.newFile', async (node?: ExplorerNode) => {
